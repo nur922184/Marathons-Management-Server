@@ -69,21 +69,31 @@ async function run() {
 
     // Update marathon by ID
     app.put('/marathons/:id', async (req, res) => {
-      const { id } = req.params;
-      const updatedData = req.body;
+      const id = req.params.id;
+      const { title, location, startDate } = req.body;
+
+      if (!title || !location || !startDate) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
       try {
-        const result = await marathonCollection.updateOne(
-          { _id: new ObjectId(id) },
-          { $set: updatedData }
-        );
-        if (result.matchedCount === 0) {
-          return res.status(404).send({ error: 'Marathon not found' });
+        const result = await MarathonModel.findByIdAndUpdate(id, {
+          title,
+          location,
+          startDate
+        });
+
+        if (!result) {
+          return res.status(404).json({ error: "Marathon not found" });
         }
-        res.send({ message: 'Marathon updated successfully' });
+
+        res.status(200).json({ message: "Marathon updated successfully" });
       } catch (error) {
-        res.status(500).send({ error: 'Failed to update marathon' });
+        console.error("Error updating marathon:", error);
+        res.status(500).json({ error: "Failed to update marathon" });
       }
     });
+
 
     // Delete marathon by ID
     app.delete('/marathons/:id', async (req, res) => {
@@ -98,6 +108,25 @@ async function run() {
         res.status(500).send({ error: 'Failed to delete marathon' });
       }
     });
+
+    // Get paginated marathons
+    app.get('/marathons', async(req, res) => {
+      const page = parseInt(req.query.page); 
+      const size = parseInt(req.query.size)
+      console.log('pagination query', page, size);
+        const result = await marathonCollection.find()
+        .skip(page * size)
+        .limit(size)
+        .toArray();
+        res.send(result);
+    })
+
+    app.get('/productsCount', async(req, res)=>{
+      const count = await marathonCollection.estimatedDocumentCount();
+      res.send({count})
+    })
+
+
 
     // ====== Application Routes ======
     // Get all applications or filter by user email
