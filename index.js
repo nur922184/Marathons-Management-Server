@@ -1,14 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+
 const app = express();
 const port = process.env.PORT || 5000;
 
-// middleware
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+// MongoDB connection
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hq6na.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -16,113 +18,147 @@ const client = new MongoClient(uri, {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
-  }
+  },
 });
 
 async function run() {
   try {
-    // Connect the client to the server (only once)
     await client.connect();
 
-    const marathonCollection = client.db('MarathonDB').collection('marathons');
-    const applicationCollection = client.db('MarathonDB').collection('applications');
+    const db = client.db('MarathonDB');
+    const marathonCollection = db.collection('marathons');
+    const applicationCollection = db.collection('applications');
 
-    // GET route to fetch data from MongoDB
+    // ====== Marathon Routes ======
+    // Get all marathons
     app.get('/marathons', async (req, res) => {
+      const email = req.query.email;
+      const filter = email ? { email } : {};
       try {
-        const result = await marathonCollection.find().toArray();
-        res.send(result);
+        const marathons = await marathonCollection.find(filter).toArray();
+        res.send(marathons);
       } catch (error) {
         res.status(500).send({ error: 'Failed to fetch marathons' });
       }
     });
 
-    app.post('/marathons', async (req, res) => {
+    // Get single marathon by ID
+    app.get('/marathons/:id', async (req, res) => {
+      const { id } = req.params;
       try {
-        const marathon = req.body; // Get the marathon data from the client
-        const result = await marathonCollection.insertOne(marathon); // Insert into MongoDB
-        res.status(201).send(result); // Send the response
-      } catch (error) {
-        console.error('Error adding marathon:', error);
-        res.status(500).send({ message: 'Failed to add marathon' });
-      }
-    });
-
-    // app.get('/applications', async (req, res) => {
-    //   try {
-    //     const userEmail = req.query.email;
-    //     const query = { email: userEmail };
-    //     const applications = await applicationCollection.find(query).toArray();
-    //     res.send(applications);
-    //   } catch (err) {
-    //     res.status(500).send({ error: 'Failed to fetch applications.' });
-    //   }
-    // });
-    app.get("/applications", async (req, res) => {
-      try {
-        const email = req.query.email; // ইমেলটি কুয়েরি প্যারামিটার থেকে সংগ্রহ করুন
-        if (!email) {
-          return res.status(400).json({ message: "Email is required" });
+        const marathon = await marathonCollection.findOne({ _id: new ObjectId(id) });
+        if (!marathon) {
+          return res.status(404).send({ error: 'Marathon not found' });
         }
-
-        const applications = await applicationCollection.find({ email }).toArray();
-        res.json(applications);
+        res.send(marathon);
       } catch (error) {
-        console.error("Error fetching applications:", error);
-        res.status(500).json({ message: "Failed to fetch applications" });
+        res.status(500).send({ error: 'Failed to fetch marathon' });
       }
     });
 
-
-    app.get("/applications", async (req, res) => {
+    // Add a new marathon
+    app.post('/marathons', async (req, res) => {
+      const marathon = req.body;
       try {
-        const applications = await applicationCollection.find({}).toArray();
-        res.json(applications);
+        const result = await marathonCollection.insertOne(marathon);
+        res.status(201).send(result);
       } catch (error) {
-        console.error("Error fetching applications:", error);
-        res.status(500).json({ message: "Failed to fetch applications" });
+        res.status(500).send({ error: 'Failed to add marathon' });
       }
     });
 
+    // Update marathon by ID
+    app.put('/marathons/:id', async (req, res) => {
+      const { id } = req.params;
+      const updatedData = req.body;
+      try {
+        const result = await marathonCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedData }
+        );
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ error: 'Marathon not found' });
+        }
+        res.send({ message: 'Marathon updated successfully' });
+      } catch (error) {
+        res.status(500).send({ error: 'Failed to update marathon' });
+      }
+    });
+
+    // Delete marathon by ID
+    app.delete('/marathons/:id', async (req, res) => {
+      const { id } = req.params;
+      try {
+        const result = await marathonCollection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ error: 'Marathon not found' });
+        }
+        res.send({ message: 'Marathon deleted successfully' });
+      } catch (error) {
+        res.status(500).send({ error: 'Failed to delete marathon' });
+      }
+    });
+
+    // ====== Application Routes ======
+    // Get all applications or filter by user email
+    app.get('/applications', async (req, res) => {
+      const email = req.query.email;
+      const filter = email ? { email } : {};
+      try {
+        const applications = await applicationCollection.find(filter).toArray();
+        res.send(applications);
+      } catch (error) {
+        res.status(500).send({ error: 'Failed to fetch applications' });
+      }
+    });
+
+    // Add a new application
     app.post('/applications', async (req, res) => {
+      const application = req.body;
       try {
-        const newApplication = req.body;
-        const result = await applicationCollection.insertOne(newApplication);
+        const result = await applicationCollection.insertOne(application);
 
-        // Increment registration count in marathon
+        // Update the related marathon's registration count
         await marathonCollection.updateOne(
-          { _id: new ObjectId(newApplication.marathonId) },
+          { _id: new ObjectId(application.marathonId) },
           { $inc: { registrationCount: 1 } }
         );
 
-        res.send(result);
-      } catch (err) {
-        res.status(500).send({ error: 'Failed to submit application.' });
+        res.status(201).send(result);
+      } catch (error) {
+        res.status(500).send({ error: 'Failed to save application' });
       }
     });
 
+    // Update application by ID
     app.put('/applications/:id', async (req, res) => {
+      const { id } = req.params;
+      const updatedData = req.body;
       try {
-        const id = req.params.id;
-        const updatedApplication = req.body;
         const result = await applicationCollection.updateOne(
           { _id: new ObjectId(id) },
-          { $set: updatedApplication }
+          { $set: updatedData }
         );
-        res.send(result);
-      } catch (err) {
-        res.status(500).send({ error: 'Failed to update application.' });
+        if (result.modifiedCount === 0) {
+          return res.status(404).send({ error: 'Application not found' });
+        }
+        res.send({ message: 'Application updated successfully' });
+      } catch (error) {
+        res.status(500).send({ error: 'Failed to update application' });
       }
     });
 
+    // Delete application by ID
     app.delete('/applications/:id', async (req, res) => {
+      const { id } = req.params;
       try {
-        const id = req.params.id;
-
-        // Retrieve application before deleting
         const application = await applicationCollection.findOne({ _id: new ObjectId(id) });
 
-        // Decrement registration count in marathon
+        if (!application) {
+          return res.status(404).send({ error: 'Application not found' });
+        }
+
+        // Decrement registration count in the related marathon
         await marathonCollection.updateOne(
           { _id: new ObjectId(application.marathonId) },
           { $inc: { registrationCount: -1 } }
@@ -130,24 +166,25 @@ async function run() {
 
         const result = await applicationCollection.deleteOne({ _id: new ObjectId(id) });
         res.send(result);
-      } catch (err) {
-        res.status(500).send({ error: 'Failed to delete application.' });
+      } catch (error) {
+        res.status(500).send({ error: 'Failed to delete application' });
       }
     });
 
-    // Ping to confirm a successful connection
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    console.log('Successfully connected to MongoDB!');
   } catch (error) {
-    console.error(error);
+    console.error('Error connecting to MongoDB:', error);
   }
 }
 
 run().catch(console.dir);
 
+// Default route
 app.get('/', (req, res) => {
-  res.send('assessment-eleven-server port');
+  res.send('Server is running...');
 });
 
+// Start the server
 app.listen(port, () => {
-  console.log(`assessment eleven server is running on port: ${port}`);
+  console.log(`Server is running on port ${port}`);
 });
