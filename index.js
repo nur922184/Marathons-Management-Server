@@ -28,8 +28,18 @@ async function run() {
     const db = client.db('MarathonDB');
     const marathonCollection = db.collection('marathons');
     const applicationCollection = db.collection('applications');
+    const upcomingCollection = db.collection('upcoming');
 
     // ====== Marathon Routes ======
+
+    //upcoming all 
+
+
+    app.get('/upcoming', async (req, res) => {
+      const result = await upcomingCollection.find().toArray();
+      res.send(result);
+    })
+
     // Get all marathons
     app.get('/marathons', async (req, res) => {
       const email = req.query.email;
@@ -110,21 +120,55 @@ async function run() {
     });
 
     // Get paginated marathons
-    app.get('/marathons', async(req, res) => {
-      const page = parseInt(req.query.page); 
-      const size = parseInt(req.query.size)
-      console.log('pagination query', page, size);
-        const result = await marathonCollection.find()
-        .skip(page * size)
-        .limit(size)
-        .toArray();
-        res.send(result);
-    })
+    // Get paginated marathons
 
-    app.get('/productsCount', async(req, res)=>{
-      const count = await marathonCollection.estimatedDocumentCount();
-      res.send({count})
-    })
+    // app.get('/marathons', async (req, res) => {
+    //   const page = parseInt(req.query.page) || 0;
+    //   const size = parseInt(req.query.size) || 10;
+    //   console.log('pagination query', { page, size }); // Debug log
+    //   const result = await marathonCollection.find({}).skip(page * size).limit(size).toArray();
+    //   res.send(result);
+    // });
+
+    app.get('/marathons', async (req, res) => {
+      const page = Math.max(0, parseInt(req.query.page) || 0); // পেজ 0 বা তার বেশি হবে
+      const size = Math.max(1, parseInt(req.query.size) || 10); // সাইজ 1 বা তার বেশি হবে
+
+      console.log('Page:', page, 'Size:', size);
+
+      try {
+        const cursor = marathonCollection.find();
+        const result = await cursor
+          .skip(page * size) // Pagination logic
+          .limit(size)
+          .toArray();
+
+        const totalCount = await marathonCollection.countDocuments();
+
+        res.send({
+          totalCount, // Total items in the database
+          result, // Paginated items
+        });
+      } catch (error) {
+        console.error('Error fetching marathons:', error);
+        res.status(500).send({ error: 'Failed to fetch marathons' });
+      }
+    });
+
+
+
+
+    // Get total count of marathons
+    app.get('/productsCount', async (req, res) => {
+      try {
+        const count = await marathonCollection.estimatedDocumentCount();
+        res.send({ count });
+      } catch (error) {
+        console.error("Error fetching count:", error);
+        res.status(500).send({ error: "Internal Server Error" });
+      }
+    });
+
 
 
 
