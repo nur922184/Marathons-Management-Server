@@ -86,30 +86,37 @@ async function run() {
     // Update marathon by ID
     app.put('/marathons/:id', async (req, res) => {
       const id = req.params.id;
-      const { title, location, startDate } = req.body;
-
-      if (!title || !location || !startDate) {
+      const { title, location, startDate, endRegistrationDate } = req.body;
+    
+      // Check if all required fields are provided
+      if (!title || !location || !startDate || !endRegistrationDate) {
         return res.status(400).json({ error: "Missing required fields" });
       }
-
+    
       try {
-        const result = await MarathonModel.findByIdAndUpdate(id, {
-          title,
-          location,
-          startDate
-        });
-
-        if (!result) {
+        const filter = { _id: new ObjectId(id) }; // Filter by ID
+        const update = { 
+          $set: { 
+            title, 
+            location, 
+            startDate, 
+            endRegistrationDate // Add this field to the update
+          } 
+        };
+    
+        const result = await marathonCollection.updateOne(filter, update);
+    
+        if (result.matchedCount === 0) {
           return res.status(404).json({ error: "Marathon not found" });
         }
-
+    
         res.status(200).json({ message: "Marathon updated successfully" });
       } catch (error) {
         console.error("Error updating marathon:", error);
         res.status(500).json({ error: "Failed to update marathon" });
       }
     });
-
+    
 
     // Delete marathon by ID
     app.delete('/marathons/:id', async (req, res) => {
