@@ -29,7 +29,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // await client.connect();
+    await client.connect();
 
     const db = client.db('MarathonDB');
     const marathonCollection = db.collection('marathons');
@@ -180,16 +180,26 @@ async function run() {
 
     // ====== Application Routes ======
     // Get all applications or filter by user email
-    app.get('/applications', async (req, res) => {
-      const email = req.query.email;
-      const filter = email ? { email } : {};
+    // Check if email exists for a specific marathon
+    app.get('/applications/check-email', async (req, res) => {
+      const { email, marathonId } = req.query;
+      if (!email || !marathonId) {
+        return res.status(400).send({ error: 'Email and marathonId are required' });
+      }
+
       try {
-        const applications = await applicationCollection.find(filter).toArray();
-        res.send(applications);
+        const existingApplication = await applicationCollection.findOne({ email, marathonId });
+        if (existingApplication) {
+          return res.status(200).send({ exists: true });
+        }
+        res.status(200).send({ exists: false });
       } catch (error) {
-        res.status(500).send({ error: 'Failed to fetch applications' });
+        res.status(500).send({ error: 'Failed to check email' });
       }
     });
+
+
+
 
     // Add a new application
     app.post('/applications', async (req, res) => {
@@ -213,15 +223,18 @@ async function run() {
     app.put('/applications/:id', async (req, res) => {
       const { id } = req.params;
       const updatedData = req.body;
+
       try {
         const result = await applicationCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: updatedData }
         );
-        if (result.modifiedCount === 0) {
-          return res.status(404).send({ error: 'Application not found' });
+
+        if (result.modifiedCount > 0) {
+          res.send({ success: true, message: 'Application updated successfully' });
+        } else {
+          res.send({ success: false, message: 'No changes made' });
         }
-        res.send({ message: 'Application updated successfully' });
       } catch (error) {
         res.status(500).send({ error: 'Failed to update application' });
       }
@@ -230,27 +243,38 @@ async function run() {
     // Delete application by ID
     app.delete('/applications/:id', async (req, res) => {
       const { id } = req.params;
+
       try {
-        const application = await applicationCollection.findOne({ _id: new ObjectId(id) });
-
-        if (!application) {
-          return res.status(404).send({ error: 'Application not found' });
-        }
-
-        // Decrement registration count in the related marathon
-        await marathonCollection.updateOne(
-          { _id: new ObjectId(application.marathonId) },
-          { $inc: { registrationCount: -1 } }
-        );
-
         const result = await applicationCollection.deleteOne({ _id: new ObjectId(id) });
-        res.send(result);
+
+        if (result.deletedCount > 0) {
+          res.send({ success: true, message: 'Application deleted successfully' });
+        } else {
+          res.send({ success: false, message: 'No application found to delete' });
+        }
       } catch (error) {
         res.status(500).send({ error: 'Failed to delete application' });
       }
     });
 
-    // console.log('Successfully connected to MongoDB!');
+    app.get('/applications', async (req, res) => {
+      const email = req.query.email; // Fetch email from query params
+      if (!email) {
+        return res.status(400).send({ error: 'Email is required' });
+      }
+
+      try {
+        const userApplications = await applicationCollection
+          .find({ email })
+          .toArray();
+        res.send(userApplications);
+      } catch (error) {
+        res.status(500).send({ error: 'Failed to fetch applications' });
+      }
+    });
+
+
+    console.log('Successfully connected to MongoDB!');
   } catch (error) {
     console.error('Error connecting to MongoDB:', error);
   }
