@@ -7,7 +7,13 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://assignment-eleven-8d2c2.web.app',
+    'https://assignment-eleven-8d2c2.firebaseapp.com'
+  ]
+}))
 app.use(express.json());
 
 // MongoDB connection
@@ -23,7 +29,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
 
     const db = client.db('MarathonDB');
     const marathonCollection = db.collection('marathons');
@@ -244,7 +250,7 @@ async function run() {
       }
     });
 
-    console.log('Successfully connected to MongoDB!');
+    // console.log('Successfully connected to MongoDB!');
   } catch (error) {
     console.error('Error connecting to MongoDB:', error);
   }
