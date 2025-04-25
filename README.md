@@ -1,11 +1,8 @@
- Absolutely! Here's the complete `README.md` file with all the code you can copy and paste directly into your project:
-
----
-
-```markdown
 # Marathons Management Server
 
-This is the backend server for the **Marathons Management** platform, designed to manage and facilitate marathon events, registrations, and participant data. Built with **Node.js**, **Express**, and **MongoDB**, this server provides RESTful APIs for frontend integration.
+This is the backend server for the **Marathons Management** platform,
+ designed to manage and facilitate marathon events, registrations, and participant data. Built with
+**Node.js**, **Express**, and **MongoDB**, this server provides RESTful APIs for frontend integration.
 
 ---
 
